@@ -1,33 +1,47 @@
+import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import classification_report
 from imblearn.over_sampling import SMOTE
+
 import re
+
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
-import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
 # Download necessary resources
 nltk.download('stopwords')
+nltk.download('punkt_tab')
 nltk.download('wordnet')
-stop_words = set(stopwords.words('english'))
-lemmatizer = WordNetLemmatizer()
 
 # Load dataset
 df = pd.read_csv("./sentimentdataset.csv")
 
 def preprocess_text(text):
-    text = str(text).lower()
-    text = re.sub(r'[^a-zA-Z\s]', '', text)  # Remove special characters
-    text = ' '.join([lemmatizer.lemmatize(word) for word in text.split() if word not in stop_words])  # Lemmatization
-    return text
+    # Lowercasing
+    text = text.lower()
+    
+    # Tokenization
+    tokens = nltk.word_tokenize(text)
+    
+    # Remove stopwords
+    stop_words = set(stopwords.words('english')) | ENGLISH_STOP_WORDS
+    tokens = [word for word in tokens if word not in stop_words]
+     
+    # Lemmatization
+    lemmatizer = WordNetLemmatizer()
+    tokens = [lemmatizer.lemmatize(word) for word in tokens]
+    
+    return ' '.join(tokens)
 
 # Clean up dataframe and preprocess text
 df = df[["Text", "Sentiment"]]
@@ -111,7 +125,7 @@ test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 # Define an improved PyTorch model for many classes
 class SentimentClassifier(nn.Module):
-    def __init__(self, input_dim, num_classes, dropout_rate=0.5):
+    def __init__(self, input_dim, num_classes, dropout_rate=0.3):
         super(SentimentClassifier, self).__init__()
         self.dropout_rate = dropout_rate
         
@@ -245,7 +259,9 @@ except KeyboardInterrupt:
 
 # Load the best model for final evaluation
 try:
-    checkpoint = torch.load('best_sentiment_model.pth')
+    # Add this line to register your LabelEncoder class as safe for loading:
+    torch.serialization.add_safe_globals([LabelEncoder, np.core.multiarray._reconstruct])  
+    checkpoint = torch.load('best_sentiment_model.pth', weights_only=False) # Explicitly set weights_only=False
     model.load_state_dict(checkpoint['model_state_dict'])
     print(f"Loaded best model from epoch {checkpoint['epoch']+1} with validation accuracy: {checkpoint['accuracy']:.4f}")
 except FileNotFoundError:
